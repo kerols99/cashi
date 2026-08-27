@@ -258,6 +258,7 @@ button{font-family:inherit}
       <div class="month-link" onclick="openMonthSummary()"><div class="txt">📊 ملخص الشهر<small id="month-sub">—</small></div></div>
       <div class="month-link" onclick="openLoansView()"><div class="txt">🤝 السلفيات<small id="loans-sub">—</small></div></div>
     </div>
+    <div class="month-link fade-up" style="margin-top:10px" onclick="openTrustView()"><div class="txt">🛡️ الأمانات<small id="trust-sub">—</small></div></div>
     <div class="month-link fade-up" style="margin-top:10px" onclick="openSearchView()"><div class="txt">🔍 بحث في كل الحركات<small>بالاسم أو الملاحظة أو الفئة</small></div></div>
 
     <div class="sec-label">حركات اليوم</div>
@@ -337,6 +338,14 @@ button{font-family:inherit}
   <div id="loans-content"></div>
 </div>
 
+<div class="sheet-overlay" id="trust-overlay" onclick="closeTrustView()"></div>
+<div class="sheet" id="trust-sheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-title">🛡️ الأمانات المفتوحة</div>
+  <div style="font-size:12px;color:var(--ink-faint);margin-bottom:14px">فلوس الناس اللي عندك لسه ماترجعتلهاش</div>
+  <div id="trust-content"></div>
+</div>
+
 <div class="sheet-overlay" id="settings-overlay" onclick="closeSettings()"></div>
 <div class="sheet" id="settings-sheet">
   <div class="sheet-handle"></div>
@@ -397,12 +406,12 @@ const SB_KEY = 'sb_publishable_By6EJgE24Ync9wY1PgQ8GA_efOz58tM';
 const sb = supabase.createClient(SB_URL, SB_KEY);
 
 const CATS = {
-  in:  [ {v:'rent', l:'🏠 إيجار بارتشن'}, {v:'loan_repay', l:'✅ استرجاع سلفة'}, {v:'other_in', l:'💰 دخل تاني'} ],
-  out: [ {v:'refund', l:'🔄 مرتجع تأمين'}, {v:'work_expense', l:'🏢 مصروف شغل'}, {v:'personal_expense', l:'🏡 مصروف شخصي'}, {v:'loan', l:'🤝 سلفة'} ],
+  in:  [ {v:'rent', l:'🏠 إيجار بارتشن'}, {v:'loan_repay', l:'✅ استرجاع سلفة'}, {v:'trust_in', l:'🛡️ استلام أمانة'}, {v:'other_in', l:'💰 دخل تاني'} ],
+  out: [ {v:'refund', l:'🔄 مرتجع تأمين'}, {v:'work_expense', l:'🏢 مصروف شغل'}, {v:'personal_expense', l:'🏡 مصروف شخصي'}, {v:'loan', l:'🤝 سلفة'}, {v:'trust_out', l:'📤 رد أمانة'} ],
 };
-const CAT_LABELS = { rent:'إيجار بارتشن', other_in:'دخل آخر', refund:'مرتجع تأمين', work_expense:'مصروف شغل', personal_expense:'مصروف شخصي', loan:'سلفة', loan_repay:'استرجاع سلفة' };
-const CAT_ICONS  = { rent:'🏠', other_in:'💰', refund:'🔄', work_expense:'🏢', personal_expense:'🏡', loan:'🤝', loan_repay:'✅' };
-const CAT_COLORS = { rent:'#2F6B4F', other_in:'#5B9C7E', refund:'#9C6B30', work_expense:'#8B3A2E', personal_expense:'#B8664F', loan:'#6B5B95', loan_repay:'#2F6B4F' };
+const CAT_LABELS = { rent:'إيجار بارتشن', other_in:'دخل آخر', refund:'مرتجع تأمين', work_expense:'مصروف شغل', personal_expense:'مصروف شخصي', loan:'سلفة', loan_repay:'استرجاع سلفة', trust_in:'استلام أمانة', trust_out:'رد أمانة' };
+const CAT_ICONS  = { rent:'🏠', other_in:'💰', refund:'🔄', work_expense:'🏢', personal_expense:'🏡', loan:'🤝', loan_repay:'✅', trust_in:'🛡️', trust_out:'📤' };
+const CAT_COLORS = { rent:'#2F6B4F', other_in:'#5B9C7E', refund:'#9C6B30', work_expense:'#8B3A2E', personal_expense:'#B8664F', loan:'#6B5B95', loan_repay:'#2F6B4F', trust_in:'#2E6B8A', trust_out:'#4C8FAE' };
 let customCats = { in: [], out: [] };
 
 // ── Theme ──
@@ -718,6 +727,7 @@ async function loadDay(dateStr){
 
   renderTxList(txs);
   updateLoansSub();
+  updateTrustSub();
   loadCashCount(dateStr);
 }
 
@@ -792,6 +802,8 @@ function setCat(v){
   var personLabel = document.getElementById('person-label');
   if(v==='loan'){ personField.style.display='block'; personLabel.textContent='اسم الشخص'; }
   else if(v==='loan_repay'){ personField.style.display='block'; personLabel.textContent='اسم الشخص اللي رجع الفلوس'; }
+  else if(v==='trust_in'){ personField.style.display='block'; personLabel.textContent='اسم اللي دّالك الأمانة'; }
+  else if(v==='trust_out'){ personField.style.display='block'; personLabel.textContent='اسم اللي رجّعت له الأمانة'; }
   else if(v==='rent'){ personField.style.display='block'; personLabel.textContent='اسم المستأجر / الشقة'; }
   else { personField.style.display='block'; personLabel.textContent='ملاحظة (اختياري)'; }
 }
@@ -939,6 +951,70 @@ function quickRepayFromBtn(btn){
   setTimeout(()=>{ document.getElementById('tx-amount').value = Math.round(amount); }, 50);
 }
 window.quickRepayFromBtn = quickRepayFromBtn;
+
+// ══════════════════════════════════════════════
+// الأمانات — عكس السلفة: trust_in (استلمت) موجب، trust_out (رديت) سالب
+// ══════════════════════════════════════════════
+async function updateTrustSub(){
+  var { data: txs } = await sb.from('transactions').select('category,person_name,amount').in('category',['trust_in','trust_out']);
+  var net = {};
+  (txs||[]).forEach(function(t){
+    if(!t.person_name) return;
+    var amt = Number(t.amount) * (t.category==='trust_in' ? 1 : -1);
+    net[t.person_name] = (net[t.person_name]||0) + amt;
+  });
+  var open = Object.keys(net).filter(k=>net[k]>0.01);
+  var total = open.reduce((s,k)=>s+net[k],0);
+  document.getElementById('trust-sub').textContent = open.length ? (fmt(total)+' AED عليك') : 'مفيش أمانات مفتوحة';
+}
+
+async function openTrustView(){
+  var { data: txs } = await sb.from('transactions').select('*').in('category',['trust_in','trust_out']).order('tx_date',{ascending:false});
+  txs = txs || [];
+  var net = {}, lastDate = {};
+  txs.forEach(function(t){
+    if(!t.person_name) return;
+    var amt = Number(t.amount) * (t.category==='trust_in' ? 1 : -1);
+    net[t.person_name] = (net[t.person_name]||0) + amt;
+    if(!lastDate[t.person_name] || t.tx_date > lastDate[t.person_name]) lastDate[t.person_name] = t.tx_date;
+  });
+
+  var names = Object.keys(net).filter(k=>net[k] > 0.01).sort((a,b)=>net[b]-net[a]);
+  var el = document.getElementById('trust-content');
+
+  if(!names.length){
+    el.innerHTML = '<div class="empty-state"><div class="ic">✅</div>مفيش أمانات مفتوحة دلوقتي</div>';
+  } else {
+    el.innerHTML = names.map(function(name){
+      var initial = name.trim().charAt(0);
+      var safeName = escapeHtml(name).replace(/'/g,"&#39;");
+      return '<div class="loan-card">'
+        + '<div class="loan-avatar">'+escapeHtml(initial)+'</div>'
+        + '<div class="loan-info"><div class="loan-name">'+escapeHtml(name)+'</div><div class="loan-sub">آخر حركة: '+lastDate[name]+'</div></div>'
+        + '<div style="text-align:left"><div class="loan-amt">'+fmt(net[name])+'</div>'
+        + '<button class="loan-repay-btn" data-name="'+safeName+'" data-amt="'+net[name]+'" onclick="quickTrustReturnFromBtn(this)">تسجيل رد</button></div>'
+        + '</div>';
+    }).join('');
+  }
+
+  document.getElementById('trust-overlay').classList.add('open');
+  document.getElementById('trust-sheet').classList.add('open');
+}
+window.openTrustView = openTrustView;
+function closeTrustView(){
+  document.getElementById('trust-overlay').classList.remove('open');
+  document.getElementById('trust-sheet').classList.remove('open');
+}
+window.closeTrustView = closeTrustView;
+
+function quickTrustReturnFromBtn(btn){
+  var name = btn.getAttribute('data-name');
+  var amount = Number(btn.getAttribute('data-amt'));
+  closeTrustView();
+  openSheet('out', 'trust_out', name);
+  setTimeout(()=>{ document.getElementById('tx-amount').value = Math.round(amount); }, 50);
+}
+window.quickTrustReturnFromBtn = quickTrustReturnFromBtn;
 
 let _searchTimer = null;
 function openSearchView(){
