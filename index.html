@@ -427,12 +427,12 @@ if (typeof supabase === 'undefined') {
 const sb = supabase.createClient(SB_URL, SB_KEY);
 
 const CATS = {
-  in:  [ {v:'rent', l:'🏠 إيجار بارتشن'}, {v:'loan_repay', l:'✅ استرجاع سلفة'}, {v:'trust_in', l:'🛡️ استلام أمانة'}, {v:'other_in', l:'💰 دخل تاني'} ],
+  in:  [ {v:'rent', l:'🏠 إيجار بارتشن'}, {v:'personal_income', l:'💼 راتب / دخل شخصي'}, {v:'loan_repay', l:'✅ استرجاع سلفة'}, {v:'trust_in', l:'🛡️ استلام أمانة'}, {v:'other_in', l:'💰 دخل تاني'} ],
   out: [ {v:'refund', l:'🔄 مرتجع تأمين'}, {v:'work_expense', l:'🏢 مصروف شغل'}, {v:'personal_expense', l:'🏡 مصروف شخصي'}, {v:'loan', l:'🤝 سلفة'}, {v:'trust_out', l:'📤 رد أمانة'} ],
 };
-const CAT_LABELS = { rent:'إيجار بارتشن', other_in:'دخل آخر', refund:'مرتجع تأمين', work_expense:'مصروف شغل', personal_expense:'مصروف شخصي', loan:'سلفة', loan_repay:'استرجاع سلفة', trust_in:'استلام أمانة', trust_out:'رد أمانة' };
-const CAT_ICONS  = { rent:'🏠', other_in:'💰', refund:'🔄', work_expense:'🏢', personal_expense:'🏡', loan:'🤝', loan_repay:'✅', trust_in:'🛡️', trust_out:'📤' };
-const CAT_COLORS = { rent:'#2F6B4F', other_in:'#5B9C7E', refund:'#9C6B30', work_expense:'#8B3A2E', personal_expense:'#B8664F', loan:'#6B5B95', loan_repay:'#2F6B4F', trust_in:'#2E6B8A', trust_out:'#4C8FAE' };
+const CAT_LABELS = { rent:'إيجار بارتشن', personal_income:'راتب / دخل شخصي', other_in:'دخل آخر', refund:'مرتجع تأمين', work_expense:'مصروف شغل', personal_expense:'مصروف شخصي', loan:'سلفة', loan_repay:'استرجاع سلفة', trust_in:'استلام أمانة', trust_out:'رد أمانة' };
+const CAT_ICONS  = { rent:'🏠', personal_income:'💼', other_in:'💰', refund:'🔄', work_expense:'🏢', personal_expense:'🏡', loan:'🤝', loan_repay:'✅', trust_in:'🛡️', trust_out:'📤' };
+const CAT_COLORS = { rent:'#2F6B4F', personal_income:'#8A6D3B', other_in:'#5B9C7E', refund:'#9C6B30', work_expense:'#8B3A2E', personal_expense:'#B8664F', loan:'#6B5B95', loan_repay:'#2F6B4F', trust_in:'#2E6B8A', trust_out:'#4C8FAE' };
 let customCats = { in: [], out: [] };
 
 // ── Theme ──
@@ -1128,6 +1128,19 @@ async function openMonthSummary(){
   });
   window._lastMonthTxs = txs; // للتصدير
 
+  // ── فصل شغل عن شخصي ──
+  var workCats = ['rent','refund','work_expense','loan','loan_repay','trust_in','trust_out'];
+  var personalCats = ['personal_income','personal_expense'];
+  var workIn=0, workOut=0, personalIn=0, personalOut=0;
+  txs.forEach(function(t){
+    var amt = Number(t.amount);
+    if(personalCats.includes(t.category)){
+      if(t.direction==='in') personalIn+=amt; else personalOut+=amt;
+    } else {
+      if(t.direction==='in') workIn+=amt; else workOut+=amt;
+    }
+  });
+
   var monthsAr = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
   var vals = Object.keys(totals).map(k=>totals[k]);
   var maxVal = Math.max.apply(null, vals.concat([1]));
@@ -1136,6 +1149,12 @@ async function openMonthSummary(){
   html += '<div class="summary-strip" style="margin-bottom:6px">'
     + '<div class="sum-card in"><div class="lbl">↓ إجمالي الداخل</div><div class="amt">'+fmt(totalIn)+'</div></div>'
     + '<div class="sum-card out"><div class="lbl">↑ إجمالي الخارج</div><div class="amt">'+fmt(totalOut)+'</div></div>'
+    + '</div>';
+
+  html += '<div class="sec-label">🏢 شغل مقابل 🏡 شخصي</div>';
+  html += '<div class="summary-strip" style="margin-bottom:14px">'
+    + '<div class="sum-card in"><div class="lbl">🏢 صافي الشغل</div><div class="amt" style="color:'+((workIn-workOut)>=0?'var(--green)':'var(--red)')+'">'+fmt(workIn-workOut)+'</div></div>'
+    + '<div class="sum-card in"><div class="lbl">🏡 صافي الشخصي</div><div class="amt" style="color:'+((personalIn-personalOut)>=0?'var(--green)':'var(--red)')+'">'+fmt(personalIn-personalOut)+'</div></div>'
     + '</div>';
 
   html += '<div class="sec-label">تفصيل حسب الفئة</div><div class="tx-list" style="padding:6px 16px">';
