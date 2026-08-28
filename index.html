@@ -318,7 +318,7 @@ button{font-family:inherit}
   <div class="sheet-title">✏️ تعديل رصيد أول اليوم</div>
   <div style="font-size:12px;color:var(--ink-faint);margin-bottom:16px;line-height:1.6">عادةً بيتحسب تلقائي من إقفال آخر يوم. عدّله بس لو محتاج تصحّح رصيد فعلي (زي أول استخدام للتطبيق).</div>
   <div class="fld"><label>💵 رصيد الكاش</label><input type="number" inputmode="decimal" id="bal-cash"></div>
-  <div class="fld"><label>🏦 رصيد البنك</label><input type="number" inputmode="decimal" id="bal-bank"></div>
+  <div id="bal-bank-accounts"></div>
   <button class="save-btn" onclick="saveBalanceEdit()">حفظ الرصيد</button>
   <div class="cancel-link" onclick="closeBalanceEdit()">إلغاء</div>
 </div>
@@ -778,28 +778,39 @@ window.jumpToDate = jumpToDate;
 
 async function getOpeningBalance(dateStr){
   var { data: existing } = await sb.from('opening_balance').select('*').eq('balance_date', dateStr).maybeSingle();
-  if(existing) return { cash: Number(existing.cash_opening), bank: Number(existing.bank_opening), manual:true };
+  if(existing) {
+    var byAccount = existing.bank_balances || {};
+    var bankTotal = Object.values(byAccount).reduce(function(s,v){return s+Number(v);},0) + Number(existing.bank_opening||0);
+    return { cash: Number(existing.cash_opening), bank: bankTotal, byAccount: byAccount, unassigned: Number(existing.bank_opening||0), manual:true };
+  }
 
   var { data: prevRows } = await sb.from('opening_balance')
     .select('*').lt('balance_date', dateStr).order('balance_date', {ascending:false}).limit(1);
 
-  var baseCash = 0, baseBank = 0, fromDate = null;
+  var baseCash = 0, baseByAccount = {}, baseUnassigned = 0, fromDate = null;
   if(prevRows && prevRows.length){
     baseCash = Number(prevRows[0].cash_opening);
-    baseBank = Number(prevRows[0].bank_opening);
+    baseByAccount = Object.assign({}, prevRows[0].bank_balances || {});
+    baseUnassigned = Number(prevRows[0].bank_opening || 0);
     fromDate = prevRows[0].balance_date;
   }
 
-  var q = sb.from('transactions').select('direction,method,amount,tx_date').lt('tx_date', dateStr);
+  var q = sb.from('transactions').select('direction,method,amount,tx_date,bank_account_id').lt('tx_date', dateStr);
   if(fromDate) q = q.gte('tx_date', fromDate);
   var { data: txs } = await q;
 
   (txs||[]).forEach(function(t){
     var amt = Number(t.amount) * (t.direction === 'in' ? 1 : -1);
-    if(t.method === 'cash') baseCash += amt; else baseBank += amt;
+    if(t.method === 'cash') { baseCash += amt; }
+    else {
+      var key = t.bank_account_id ? String(t.bank_account_id) : null;
+      if(key){ baseByAccount[key] = Number(baseByAccount[key]||0) + amt; }
+      else { baseUnassigned += amt; }
+    }
   });
 
-  return { cash: baseCash, bank: baseBank, manual:false };
+  var bankTotal = Object.values(baseByAccount).reduce(function(s,v){return s+Number(v);},0) + baseUnassigned;
+  return { cash: baseCash, bank: bankTotal, byAccount: baseByAccount, unassigned: baseUnassigned, manual:false };
 }
 
 async function loadDay(dateStr){
@@ -884,7 +895,30 @@ function renderTxList(txs){
 
 function openBalanceEdit(){
   document.getElementById('bal-cash').value = Math.round(curOpening.cash);
-  document.getElementById('bal-bank').value = Math.round(curOpening.bank);
+
+  var wrap = document.getElementById('bal-bank-accounts');
+  var byAccount = curOpening.byAccount || {};
+  var html = '';
+
+  if(!bankAccounts.length){
+    html = '<div style="font-size:12px;color:var(--ink-faint);margin-bottom:14px">لسه مفيش حسابات بنكية مضافة — أضف واحد من ⚙️ الإعدادات</div>';
+  } else {
+    bankAccounts.forEach(function(b){
+      var val = Math.round(Number(byAccount[String(b.id)] || 0));
+      html += '<div class="fld"><label>🏦 '+escapeHtml(b.name)+'</label>'
+        + '<input type="number" inputmode="decimal" class="bal-bank-input" data-account-id="'+b.id+'" value="'+val+'"></div>';
+    });
+  }
+
+  // مبلغ قديم غير مربوط بحساب معيّن (بيانات قبل إضافة الحسابات)
+  if(Number(curOpening.unassigned||0) !== 0){
+    html += '<div class="fld"><label>🏦 بنك (بدون حساب محدد — بيانات قديمة)</label>'
+      + '<input type="number" inputmode="decimal" id="bal-bank-unassigned" value="'+Math.round(curOpening.unassigned)+'"></div>';
+  } else {
+    html += '<input type="hidden" id="bal-bank-unassigned" value="0">';
+  }
+
+  wrap.innerHTML = html;
   document.getElementById('bal-overlay').classList.add('open');
   document.getElementById('bal-sheet').classList.add('open');
 }
@@ -897,9 +931,14 @@ window.closeBalanceEdit = closeBalanceEdit;
 
 async function saveBalanceEdit(){
   var cash = Number(document.getElementById('bal-cash').value)||0;
-  var bank = Number(document.getElementById('bal-bank').value)||0;
+  var bankBalances = {};
+  document.querySelectorAll('.bal-bank-input').forEach(function(inp){
+    bankBalances[inp.dataset.accountId] = Number(inp.value)||0;
+  });
+  var unassigned = Number((document.getElementById('bal-bank-unassigned')||{}).value)||0;
+
   var { error } = await sb.from('opening_balance').upsert({
-    balance_date: curDate, cash_opening: cash, bank_opening: bank, is_manual: true
+    balance_date: curDate, cash_opening: cash, bank_balances: bankBalances, bank_opening: unassigned, is_manual: true
   }, { onConflict:'balance_date' });
   if(error){ toast('خطأ: '+error.message,'err'); return; }
   toast('تم تعديل الرصيد ✓','ok');
