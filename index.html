@@ -300,6 +300,10 @@ button{font-family:inherit}
       <button data-m="bank" onclick="setMethod('bank')">🏦 بنك</button>
     </div>
   </div>
+  <div class="fld" id="bank-account-field" style="display:none">
+    <label>الحساب البنكي</label>
+    <select id="tx-bank-account" style="width:100%;height:48px;border-radius:11px;border:1.5px solid var(--paper-line);background:var(--card-bg);padding:0 14px;font-family:var(--font-ui);font-size:16px;color:var(--ink);outline:none"></select>
+  </div>
   <div class="fld"><label>المبلغ (AED)</label><input type="number" inputmode="decimal" id="tx-amount" placeholder="0"></div>
   <div class="fld" id="person-field"><label id="person-label">الاسم</label><input type="text" id="tx-person" placeholder="اختياري" list="person-suggestions"><datalist id="person-suggestions"></datalist></div>
   <div class="fld"><label>ملاحظات</label><textarea id="tx-notes" placeholder="اختياري"></textarea></div>
@@ -375,6 +379,13 @@ button{font-family:inherit}
   <div style="display:flex;gap:8px">
     <input type="text" id="new-cat-out" placeholder="اسم الفئة..." style="flex:1;height:42px;border-radius:10px;border:1.5px solid var(--paper-line);background:var(--card-bg);padding:0 12px;font-family:var(--font-ui);font-size:14px;color:var(--ink);outline:none">
     <button onclick="addCustomCat('out')" style="width:42px;height:42px;border-radius:10px;border:none;background:var(--red);color:#fff;font-size:18px;cursor:pointer">+</button>
+  </div>
+
+  <div class="sec-label" style="margin-top:20px">🏦 الحسابات البنكية</div>
+  <div id="bank-accounts-list" style="margin-bottom:12px"></div>
+  <div style="display:flex;gap:8px">
+    <input type="text" id="new-bank-account" placeholder="اسم الحساب (مثلاً: بنك مصر)..." style="flex:1;height:42px;border-radius:10px;border:1.5px solid var(--paper-line);background:var(--card-bg);padding:0 12px;font-family:var(--font-ui);font-size:14px;color:var(--ink);outline:none">
+    <button onclick="addBankAccount()" style="width:42px;height:42px;border-radius:10px;border:none;background:var(--brass);color:#fff;font-size:18px;cursor:pointer">+</button>
   </div>
 
   <div class="cancel-link" onclick="closeSettings()" style="margin-top:16px">إغلاق</div>
@@ -453,6 +464,7 @@ function openSettings(){
   document.getElementById('settings-overlay').classList.add('open');
   document.getElementById('settings-sheet').classList.add('open');
   renderCustomCatsSettings();
+  renderBankAccountsSettings();
 }
 window.openSettings = openSettings;
 function closeSettings(){
@@ -503,6 +515,70 @@ async function deleteCustomCat(id, dir){
   toast('تم الحذف','ok');
 }
 window.deleteCustomCat = deleteCustomCat;
+
+// ══════════════════════════════════════════════
+// حسابات بنكية متعددة
+// ══════════════════════════════════════════════
+let bankAccounts = [];
+
+async function loadBankAccounts(){
+  var { data } = await sb.from('bank_accounts').select('*').order('created_at');
+  bankAccounts = data || [];
+  renderBankAccountSelect();
+}
+
+function renderBankAccountSelect(){
+  var sel = document.getElementById('tx-bank-account');
+  if(!sel) return;
+  if(!bankAccounts.length){
+    sel.innerHTML = '<option value="">لا يوجد حسابات — أضف واحد من الإعدادات ⚙️</option>';
+    return;
+  }
+  sel.innerHTML = bankAccounts.map(function(b){
+    return '<option value="'+b.id+'">'+escapeHtml(b.name)+'</option>';
+  }).join('');
+}
+
+function renderBankAccountsSettings(){
+  var el = document.getElementById('bank-accounts-list');
+  if(!el) return;
+  if(!bankAccounts.length){ el.innerHTML = '<div style="font-size:12px;color:var(--ink-faint)">لسه مفيش حسابات بنكية مضافة</div>'; return; }
+  el.innerHTML = bankAccounts.map(function(b){
+    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;background:var(--paper-soft);border-radius:9px;margin-bottom:6px">'
+      + '<span style="font-size:13px">🏦 '+escapeHtml(b.name)+'</span>'
+      + '<button data-id="'+b.id+'" onclick="deleteBankAccount(this.dataset.id)" style="background:none;border:none;color:var(--red);font-size:13px;cursor:pointer;font-weight:700">حذف</button>'
+      + '</div>';
+  }).join('');
+}
+
+async function addBankAccount(){
+  var input = document.getElementById('new-bank-account');
+  var name = input.value.trim();
+  if(!name){ toast('اكتب اسم الحساب','err'); return; }
+  var { error } = await sb.from('bank_accounts').insert({ name: name });
+  if(error){ toast('خطأ: '+error.message,'err'); return; }
+  input.value = '';
+  await loadBankAccounts();
+  renderBankAccountsSettings();
+  toast('تمت الإضافة ✓','ok');
+}
+window.addBankAccount = addBankAccount;
+
+async function deleteBankAccount(id){
+  var ok = await askConfirm('حذف الحساب البنكي ده؟ الحركات القديمة المسجلة عليه هتفضل موجودة بدون ربط.', 'حذف');
+  if(!ok) return;
+  await sb.from('bank_accounts').delete().eq('id', id);
+  await loadBankAccounts();
+  renderBankAccountsSettings();
+  toast('تم الحذف','ok');
+}
+window.deleteBankAccount = deleteBankAccount;
+
+function getBankAccountName(id){
+  if(!id) return 'بنك (بدون حساب محدد)';
+  var found = bankAccounts.find(function(b){ return String(b.id)===String(id); });
+  return found ? found.name : 'حساب محذوف';
+}
 
 function getAllCats(dir){
   var base = CATS[dir].slice();
@@ -667,7 +743,7 @@ async function boot(){
     document.getElementById('app').style.display='block';
     document.getElementById('fab-row').style.display='flex';
     initTheme();
-    await withTimeout(Promise.all([ loadCustomCats(), loadDay(curDate) ]), 12000, 'تحميل البيانات');
+    await withTimeout(Promise.all([ loadCustomCats(), loadBankAccounts(), loadDay(curDate) ]), 12000, 'تحميل البيانات');
     renderCats();
     loadPersonSuggestions();
   } catch(e) {
@@ -796,7 +872,7 @@ function renderTxList(txs){
   if(!txs.length){ el.innerHTML = '<div class="empty-state"><div class="ic">🧾</div>لسه مفيش حركات اليوم ده</div>'; return; }
   el.innerHTML = txs.map(function(t){
     var disp = getCatDisplay(t.category);
-    var methodLabel = t.method==='cash' ? '💵 كاش' : '🏦 بنك';
+    var methodLabel = t.method==='cash' ? '💵 كاش' : '🏦 '+getBankAccountName(t.bank_account_id);
     var meta = [t.person_name, t.notes].filter(Boolean).join(' — ') || methodLabel;
     return '<div class="tx-row" onclick="openEditTx('+t.id+')">'
       + '<div class="tx-icon '+t.direction+'">'+disp.icon+'</div>'
@@ -862,6 +938,8 @@ window.setCat = setCat;
 function setMethod(m){
   curMethod = m;
   document.querySelectorAll('#method-seg button').forEach(b=>b.classList.toggle('active', b.dataset.m===m));
+  var bankField = document.getElementById('bank-account-field');
+  if(bankField) bankField.style.display = (m==='bank') ? 'block' : 'none';
 }
 window.setMethod = setMethod;
 
@@ -888,7 +966,7 @@ async function openEditTx(id){
   editingId = id; curDir = t.direction; curCat = t.category; curMethod = t.method;
   document.getElementById('sheet-title').textContent = (t.direction==='in'?'↓':'↑') + ' تعديل الحركة';
   renderCats();
-  setTimeout(()=>{ setCat(t.category); setMethod(t.method); }, 0);
+  setTimeout(()=>{ setCat(t.category); setMethod(t.method); if(t.bank_account_id) document.getElementById('tx-bank-account').value = t.bank_account_id; }, 0);
   document.getElementById('tx-amount').value = t.amount;
   document.getElementById('tx-person').value = t.person_name||'';
   document.getElementById('tx-notes').value = t.notes||'';
@@ -916,6 +994,7 @@ async function saveTx(){
     amount: amt,
     person_name: document.getElementById('tx-person').value.trim() || null,
     notes: document.getElementById('tx-notes').value.trim() || null,
+    bank_account_id: (curMethod==='bank' ? (document.getElementById('tx-bank-account').value || null) : null),
   };
   var res = editingId
     ? await sb.from('transactions').update(payload).eq('id', editingId)
@@ -1157,6 +1236,30 @@ async function openMonthSummary(){
     + '<div class="sum-card in"><div class="lbl">🏡 صافي الشخصي</div><div class="amt" style="color:'+((personalIn-personalOut)>=0?'var(--green)':'var(--red)')+'">'+fmt(personalIn-personalOut)+'</div></div>'
     + '</div>';
 
+  // ── تفصيل حسب الحساب البنكي ──
+  if(bankAccounts.length){
+    var bankTotals = {};
+    txs.forEach(function(t){
+      if(t.method!=='bank') return;
+      var key = t.bank_account_id || 'unassigned';
+      var amt = Number(t.amount) * (t.direction==='in'?1:-1);
+      bankTotals[key] = (bankTotals[key]||0) + amt;
+    });
+    var bankKeys = Object.keys(bankTotals);
+    if(bankKeys.length){
+      html += '<div class="sec-label">🏦 تفصيل الحسابات البنكية (صافي الشهر)</div><div class="tx-list" style="padding:6px 16px;margin-bottom:6px">';
+      bankKeys.forEach(function(key){
+        var name = key==='unassigned' ? 'بنك (بدون حساب محدد)' : getBankAccountName(key);
+        var val = bankTotals[key];
+        html += '<div style="display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px dashed var(--paper-line);font-size:13px">'
+          + '<span>🏦 '+escapeHtml(name)+'</span>'
+          + '<span style="font-weight:700;font-family:var(--font-num);color:'+(val>=0?'var(--green)':'var(--red)')+'">'+fmt(val)+'</span>'
+          + '</div>';
+      });
+      html += '</div>';
+    }
+  }
+
   html += '<div class="sec-label">تفصيل حسب الفئة</div><div class="tx-list" style="padding:6px 16px">';
   var any=false;
   Object.keys(CAT_LABELS).forEach(function(k){
@@ -1185,11 +1288,11 @@ window.openMonthSummary = openMonthSummary;
 function exportMonthCSV(){
   var txs = window._lastMonthTxs || [];
   if(!txs.length){ toast('مفيش بيانات للتصدير','err'); return; }
-  var rows = [['التاريخ','الاتجاه','الفئة','الطريقة','المبلغ','الاسم','ملاحظات']];
+  var rows = [['التاريخ','الاتجاه','الفئة','الطريقة','الحساب البنكي','المبلغ','الاسم','ملاحظات']];
   txs.forEach(function(t){
     rows.push([
       t.tx_date, t.direction==='in'?'دخول':'خروج', CAT_LABELS[t.category]||t.category,
-      t.method==='cash'?'كاش':'بنك', t.amount, t.person_name||'', t.notes||''
+      t.method==='cash'?'كاش':'بنك', t.method==='bank'?getBankAccountName(t.bank_account_id):'', t.amount, t.person_name||'', t.notes||''
     ]);
   });
   var csv = '\uFEFF' + rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\n');
