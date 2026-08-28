@@ -8,6 +8,10 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="الدرج اليومي">
 <title>الدرج اليومي</title>
+<link rel="preconnect" href="https://ljfkpmzfppzuhybcrfkk.supabase.co">
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22%D8%A7%D9%84%D8%AF%D8%B1%D8%AC%20%D8%A7%D9%84%D9%8A%D9%88%D9%85%D9%8A%22%2C%22short_name%22%3A%22%D8%A7%D9%84%D8%AF%D8%B1%D8%AC%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23F4F2ED%22%2C%22theme_color%22%3A%22%23F4F2ED%22%7D">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -628,9 +632,8 @@ async function boot(){
   document.getElementById('app').style.display='block';
   document.getElementById('fab-row').style.display='flex';
   initTheme();
-  await loadCustomCats();
+  await Promise.all([ loadCustomCats(), loadDay(curDate) ]);
   renderCats();
-  await loadDay(curDate);
   loadPersonSuggestions();
 }
 
@@ -693,12 +696,12 @@ async function loadDay(dateStr){
   var lbl = fmtDateLabel(dateStr);
   document.getElementById('date-label').innerHTML = lbl.main + (lbl.today ? '<span class="today-tag">اليوم</span>' : '');
 
-  var opening = await getOpeningBalance(dateStr);
+  var opening = null, txs = [];
+  await Promise.all([
+    getOpeningBalance(dateStr).then(function(o){ opening = o; }),
+    sb.from('transactions').select('*').eq('tx_date', dateStr).order('created_at', {ascending:false}).then(function(r){ txs = r.data || []; })
+  ]);
   curOpening = opening;
-
-  var { data: txs } = await sb.from('transactions')
-    .select('*').eq('tx_date', dateStr).order('created_at', {ascending:false});
-  txs = txs || [];
 
   var inCash=0, inBank=0, outCash=0, outBank=0;
   txs.forEach(function(t){
@@ -720,16 +723,8 @@ async function loadDay(dateStr){
   document.getElementById('sum-out').textContent = fmt(outCash+outBank);
 
   // ── دلتا مقارنة برصيد إقفال أمس ──
-  var ydayDate = new Date(dateStr+'T00:00:00'); ydayDate.setDate(ydayDate.getDate()-1);
-  var ydayStr = ydayDate.toISOString().slice(0,10);
-  var ydayOpening = await getOpeningBalance(ydayStr);
-  var { data: ydayTxs } = await sb.from('transactions').select('direction,method,amount').eq('tx_date', ydayStr);
-  var yCash=ydayOpening.cash, yBank=ydayOpening.bank;
-  (ydayTxs||[]).forEach(function(t){
-    var a = Number(t.amount) * (t.direction==='in'?1:-1);
-    if(t.method==='cash') yCash+=a; else yBank+=a;
-  });
-  var yTotal = yCash+yBank;
+  // رصيد أول النهاردة = رصيد آخر إمبارح رياضياً — من غير ما نحتاج طلب شبكة تاني
+  var yTotal = opening.cash + opening.bank;
   var todayTotal = closeCash+closeBank;
   var diff = todayTotal - yTotal;
   var badge = document.getElementById('delta-badge');
