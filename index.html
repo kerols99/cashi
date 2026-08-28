@@ -620,22 +620,49 @@ async function doLogout(){
 }
 window.doLogout = doLogout;
 
-async function boot(){
-  var { data: { session } } = await sb.auth.getSession();
-  document.getElementById('boot-screen').style.display='none';
-  if(!session){
-    document.getElementById('login-screen').style.display='flex';
-    document.getElementById('app').style.display='none';
-    document.getElementById('fab-row').style.display='none';
-    return;
+// دالة تحط سقف زمني لأي Promise — لو اتأخر تفشل بدل ما تعلّق للأبد
+function withTimeout(promise, ms, label){
+  return Promise.race([
+    promise,
+    new Promise(function(_, reject){
+      setTimeout(function(){ reject(new Error('انتهت المهلة: '+(label||'الاتصال')+' — استغرق أكتر من '+(ms/1000)+' ثانية')); }, ms);
+    })
+  ]);
+}
+
+function showBootError(message){
+  var boot = document.getElementById('boot-screen');
+  var errEl = document.getElementById('boot-error');
+  if(boot) boot.style.display = 'flex';
+  if(errEl){
+    errEl.style.display = 'block';
+    errEl.innerHTML = '⚠️ '+message+'<br><br>'
+      + '<button onclick="location.reload()" style="margin-top:8px;padding:10px 20px;border:none;border-radius:10px;background:#1C1C1A;color:#F4F2ED;font-size:13px;font-weight:700;cursor:pointer">🔄 إعادة المحاولة</button>';
   }
-  document.getElementById('login-screen').style.display='none';
-  document.getElementById('app').style.display='block';
-  document.getElementById('fab-row').style.display='flex';
-  initTheme();
-  await Promise.all([ loadCustomCats(), loadDay(curDate) ]);
-  renderCats();
-  loadPersonSuggestions();
+}
+
+async function boot(){
+  try {
+    var sessionResult = await withTimeout(sb.auth.getSession(), 10000, 'التحقق من تسجيل الدخول');
+    var session = sessionResult.data.session;
+    document.getElementById('boot-screen').style.display='none';
+    if(!session){
+      document.getElementById('login-screen').style.display='flex';
+      document.getElementById('app').style.display='none';
+      document.getElementById('fab-row').style.display='none';
+      return;
+    }
+    document.getElementById('login-screen').style.display='none';
+    document.getElementById('app').style.display='block';
+    document.getElementById('fab-row').style.display='flex';
+    initTheme();
+    await withTimeout(Promise.all([ loadCustomCats(), loadDay(curDate) ]), 12000, 'تحميل البيانات');
+    renderCats();
+    loadPersonSuggestions();
+  } catch(e) {
+    console.error('Boot error:', e);
+    showBootError(e.message || 'حصل خطأ غير متوقع أثناء فتح التطبيق');
+  }
 }
 
 function fmtDateLabel(dateStr){
