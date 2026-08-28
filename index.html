@@ -11,6 +11,12 @@
 <link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22%D8%A7%D9%84%D8%AF%D8%B1%D8%AC%20%D8%A7%D9%84%D9%8A%D9%88%D9%85%D9%8A%22%2C%22short_name%22%3A%22%D8%A7%D9%84%D8%AF%D8%B1%D8%AC%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23F4F2ED%22%2C%22theme_color%22%3A%22%23F4F2ED%22%7D">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+  // Fallback لو jsdelivr مسدود على شبكة المستخدم
+  if (typeof supabase === 'undefined') {
+    document.write('<script src="https://unpkg.com/@supabase/supabase-js@2"><\/script>');
+  }
+</script>
 <style>
 :root{
   --paper:#F4F2ED; --paper-soft:#EAE7DE; --paper-line:#CFC9B8; --paper-line-soft:#DEDACB;
@@ -187,7 +193,7 @@ button{font-family:inherit}
 </head>
 <body>
 
-<div id="boot-screen"><div class="brand-mark"></div></div>
+<div id="boot-screen"><div class="brand-mark"></div><div id="boot-error" style="display:none;text-align:center;padding:20px;font-family:sans-serif;font-size:13px;color:#8B3A2E;max-width:280px;line-height:1.6"></div></div>
 
 <div id="app" style="display:none">
   <div class="topbar">
@@ -403,6 +409,16 @@ function _confirmResolve(val){
 window._confirmResolve = _confirmResolve;
 const SB_URL = 'https://ljfkpmzfppzuhybcrfkk.supabase.co';
 const SB_KEY = 'sb_publishable_By6EJgE24Ync9wY1PgQ8GA_efOz58tM';
+
+if (typeof supabase === 'undefined') {
+  var bootErr = document.getElementById('boot-error');
+  if (bootErr) {
+    bootErr.style.display = 'block';
+    bootErr.innerHTML = '⚠️ فشل تحميل مكتبة الاتصال بالسيرفر.<br><br>جرّب:<br>• تأكد من اتصال الإنترنت<br>• أوقف أي حاجب إعلانات (AdBlock)<br>• جرّب شبكة تانية (WiFi/بيانات)<br>• اعمل تحديث للصفحة (Pull to refresh)';
+  }
+  throw new Error('Supabase SDK failed to load from CDN');
+}
+
 const sb = supabase.createClient(SB_URL, SB_KEY);
 
 const CATS = {
