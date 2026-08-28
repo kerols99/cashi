@@ -585,17 +585,23 @@ async function doLogin(){
   err.textContent = '';
   if(!email || !pass){ err.textContent='أدخل البريد وكلمة المرور'; return; }
   btn.disabled = true; btn.textContent = '...';
-  var { error } = await sb.auth.signInWithPassword({ email, password: pass });
-  btn.disabled = false; btn.textContent = 'دخول';
-  if(error){
-    if(error.message.includes('Invalid login credentials')){
-      err.textContent = 'البريد أو كلمة المرور غلط';
-    } else {
-      err.textContent = 'خطأ: ' + error.message;
+  try {
+    var { error } = await withTimeout(sb.auth.signInWithPassword({ email, password: pass }), 10000, 'تسجيل الدخول');
+    btn.disabled = false; btn.textContent = 'دخول';
+    if(error){
+      if(error.message.includes('Invalid login credentials')){
+        err.textContent = 'البريد أو كلمة المرور غلط';
+      } else {
+        err.textContent = 'خطأ: ' + error.message;
+      }
+      return;
     }
-    return;
+    boot();
+  } catch(e) {
+    btn.disabled = false; btn.textContent = 'دخول';
+    err.textContent = '⚠️ ' + (e.message || 'فشل الاتصال بالسيرفر — جرّب تاني');
+    console.error('Login error:', e);
   }
-  boot();
 }
 window.doLogin = doLogin;
 
@@ -606,9 +612,14 @@ async function doSignup(){
   err.textContent = '';
   if(!email || !pass){ err.textContent='أدخل البريد وكلمة المرور'; return; }
   if(pass.length < 6){ err.textContent='كلمة المرور 6 أحرف على الأقل'; return; }
-  var { error } = await sb.auth.signUp({ email, password: pass });
-  if(error){ err.textContent = 'خطأ: ' + error.message; return; }
-  toast('تم إنشاء الحساب — سجّل دخول دلوقتي', 'ok');
+  try {
+    var { error } = await withTimeout(sb.auth.signUp({ email, password: pass }), 10000, 'إنشاء الحساب');
+    if(error){ err.textContent = 'خطأ: ' + error.message; return; }
+    toast('تم إنشاء الحساب — سجّل دخول دلوقتي', 'ok');
+  } catch(e) {
+    err.textContent = '⚠️ ' + (e.message || 'فشل الاتصال بالسيرفر — جرّب تاني');
+    console.error('Signup error:', e);
+  }
 }
 window.doSignup = doSignup;
 
