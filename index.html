@@ -261,15 +261,15 @@ button{font-family:inherit}
     <div class="receipt fade-up" style="margin-top:14px">
       <div class="receipt-body">
         <div class="receipt-title-row">
-          <div class="receipt-title">🏠 تسوية المالك (هذا الشهر)</div>
+          <div class="receipt-title">🏠 المستحق عليك اليوم</div>
         </div>
-        <div style="font-size:11.5px;color:var(--ink-faint);margin-bottom:12px;line-height:1.6">اكتب المستحق عليك سداده للمالك من شيتك الخارجي، والتطبيق يقارنه بمجموع دفعات المالك المسجّلة هنا</div>
+        <div style="font-size:11.5px;color:var(--ink-faint);margin-bottom:12px;line-height:1.6">اكتب المستحق عليك تسديده النهاردة (من شيتك الخارجي)، والتطبيق يقارنه بالفلوس اللي معاك فعلياً</div>
         <div style="margin-bottom:10px">
-          <label style="font-size:11px;font-weight:600;color:var(--ink-soft);display:block;margin-bottom:5px">🏠 المستحق عليك سداده للمالك</label>
+          <label style="font-size:11px;font-weight:600;color:var(--ink-soft);display:block;margin-bottom:5px">🏠 المستحق عليك تسديده اليوم</label>
           <input type="number" inputmode="decimal" id="owner-target-input" oninput="calcOwnerDiff()" style="width:100%;height:44px;border-radius:11px;border:1.5px solid var(--paper-line);background:var(--card-bg);padding:0 12px;font-family:var(--font-num);font-size:16px;color:var(--ink);outline:none">
         </div>
         <div id="owner-diff-result"></div>
-        <button class="save-btn" style="height:44px;font-size:13.5px" onclick="saveOwnerTarget()">حفظ المستهدف</button>
+        <button class="save-btn" style="height:44px;font-size:13.5px" onclick="saveOwnerTarget()">حفظ المستحق</button>
       </div>
       <div class="receipt-zigzag"></div>
     </div>
@@ -455,11 +455,11 @@ const sb = supabase.createClient(SB_URL, SB_KEY);
 
 const CATS = {
   in:  [ {v:'rent', l:'🏠 إيجار بارتشن'}, {v:'personal_income', l:'💼 راتب / دخل شخصي'}, {v:'loan_repay', l:'✅ استرجاع سلفة'}, {v:'trust_in', l:'🛡️ استلام أمانة'}, {v:'other_in', l:'💰 دخل تاني'} ],
-  out: [ {v:'refund', l:'🔄 مرتجع تأمين'}, {v:'work_expense', l:'🏢 مصروف شغل'}, {v:'personal_expense', l:'🏡 مصروف شخصي'}, {v:'loan', l:'🤝 سلفة'}, {v:'trust_out', l:'📤 رد أمانة'}, {v:'owner_due', l:'🏠 دفعة للمالك'} ],
+  out: [ {v:'refund', l:'🔄 مرتجع تأمين'}, {v:'work_expense', l:'🏢 مصروف شغل'}, {v:'personal_expense', l:'🏡 مصروف شخصي'}, {v:'loan', l:'🤝 سلفة'}, {v:'trust_out', l:'📤 رد أمانة'} ],
 };
-const CAT_LABELS = { rent:'إيجار بارتشن', personal_income:'راتب / دخل شخصي', other_in:'دخل آخر', refund:'مرتجع تأمين', work_expense:'مصروف شغل', personal_expense:'مصروف شخصي', loan:'سلفة', loan_repay:'استرجاع سلفة', trust_in:'استلام أمانة', trust_out:'رد أمانة', owner_due:'دفعة للمالك' };
-const CAT_ICONS  = { rent:'🏠', personal_income:'💼', other_in:'💰', refund:'🔄', work_expense:'🏢', personal_expense:'🏡', loan:'🤝', loan_repay:'✅', trust_in:'🛡️', trust_out:'📤', owner_due:'🏠' };
-const CAT_COLORS = { rent:'#2F6B4F', personal_income:'#8A6D3B', other_in:'#5B9C7E', refund:'#9C6B30', work_expense:'#8B3A2E', personal_expense:'#B8664F', loan:'#6B5B95', loan_repay:'#2F6B4F', trust_in:'#2E6B8A', trust_out:'#4C8FAE', owner_due:'#6E4A2E' };
+const CAT_LABELS = { rent:'إيجار بارتشن', personal_income:'راتب / دخل شخصي', other_in:'دخل آخر', refund:'مرتجع تأمين', work_expense:'مصروف شغل', personal_expense:'مصروف شخصي', loan:'سلفة', loan_repay:'استرجاع سلفة', trust_in:'استلام أمانة', trust_out:'رد أمانة' };
+const CAT_ICONS  = { rent:'🏠', personal_income:'💼', other_in:'💰', refund:'🔄', work_expense:'🏢', personal_expense:'🏡', loan:'🤝', loan_repay:'✅', trust_in:'🛡️', trust_out:'📤' };
+const CAT_COLORS = { rent:'#2F6B4F', personal_income:'#8A6D3B', other_in:'#5B9C7E', refund:'#9C6B30', work_expense:'#8B3A2E', personal_expense:'#B8664F', loan:'#6B5B95', loan_repay:'#2F6B4F', trust_in:'#2E6B8A', trust_out:'#4C8FAE' };
 let customCats = { in: [], out: [] };
 
 // ── Theme ──
@@ -659,31 +659,32 @@ window.saveCashCount = saveCashCount;
 
 // ── تسوية المالك الشهرية ──
 async function loadOwnerTarget(dateStr){
-  var monStart = dateStr.slice(0,7) + '-01';
-  var { data } = await sb.from('owner_target').select('*').eq('month_date', monStart).maybeSingle();
+  var { data } = await sb.from('owner_target').select('*').eq('target_date', dateStr).maybeSingle();
   document.getElementById('owner-target-input').value = data ? data.target_amount : '';
-  await calcOwnerDiff();
+  calcOwnerDiff();
 }
 
-async function calcOwnerDiff(){
+function calcOwnerDiff(){
   var target = document.getElementById('owner-target-input').value;
   var el = document.getElementById('owner-diff-result');
   if(target === '' || target === null){ el.innerHTML=''; return; }
 
-  var monStart = curDate.slice(0,7) + '-01';
-  var d = new Date(curDate+'T00:00:00');
-  var monEnd = new Date(d.getFullYear(), d.getMonth()+1, 0).toISOString().slice(0,10);
+  // الفلوس اللي معاك = رصيد آخر اليوم (كاش + بنك) — من نفس الحساب الظاهر فوق
+  var closeCash = Number((document.getElementById('close-cash').textContent||'0').replace(/,/g,'')) || 0;
+  var closeBank = Number((document.getElementById('close-bank').textContent||'0').replace(/,/g,'')) || 0;
+  var haveNow = closeCash + closeBank;
 
-  var { data: txs } = await sb.from('transactions').select('amount').eq('category','owner_due').gte('tx_date',monStart).lte('tx_date',monEnd);
-  var paid = (txs||[]).reduce(function(s,t){return s+Number(t.amount);},0);
-  var remaining = Number(target) - paid;
+  var due = Number(target);
+  var diff = haveNow - due;
 
-  var color = remaining<=0 ? 'var(--green)' : 'var(--red)';
-  var text = remaining<=0 ? (remaining===0?'مسدد بالكامل ✓':'دفعت زيادة '+fmt(Math.abs(remaining))+' AED') : 'باقي عليك '+fmt(remaining)+' AED';
+  var color = diff>=0 ? 'var(--green)' : 'var(--red)';
+  var text = diff>=0
+    ? (diff===0 ? 'كافي بالظبط ✓' : 'كافي — هيفضل معاك '+fmt(diff)+' AED')
+    : 'مش كافي — ناقصك '+fmt(Math.abs(diff))+' AED';
 
   el.innerHTML = '<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px dashed var(--paper-line);font-size:13px;margin-bottom:8px">'
-    + '<span style="color:var(--ink-soft)">💰 مدفوع للمالك هذا الشهر</span>'
-    + '<span style="font-weight:700">'+fmt(paid)+' AED</span>'
+    + '<span style="color:var(--ink-soft)">💰 الفلوس اللي معاك الآن</span>'
+    + '<span style="font-weight:700">'+fmt(haveNow)+' AED</span>'
     + '</div>'
     + '<div style="display:flex;justify-content:space-between;padding:7px 0;font-size:14px;margin-bottom:10px">'
     + '<span style="font-weight:600">الحالة</span>'
@@ -694,12 +695,11 @@ window.calcOwnerDiff = calcOwnerDiff;
 
 async function saveOwnerTarget(){
   var target = Number(document.getElementById('owner-target-input').value)||0;
-  var monStart = curDate.slice(0,7) + '-01';
   var { error } = await sb.from('owner_target').upsert({
-    month_date: monStart, target_amount: target
-  }, { onConflict:'month_date' });
+    target_date: curDate, target_amount: target
+  }, { onConflict:'target_date' });
   if(error){ toast('خطأ: '+error.message,'err'); return; }
-  toast('تم حفظ المستهدف ✓','ok');
+  toast('تم حفظ المستحق ✓','ok');
   calcOwnerDiff();
 }
 window.saveOwnerTarget = saveOwnerTarget;
