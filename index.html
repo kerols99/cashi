@@ -664,16 +664,24 @@ async function loadOwnerTarget(dateStr){
   calcOwnerDiff();
 }
 
-function calcOwnerDiff(){
+async function calcOwnerDiff(){
   var target = document.getElementById('owner-target-input').value;
   var el = document.getElementById('owner-diff-result');
   if(target === '' || target === null){ el.innerHTML=''; return; }
 
-  // الفلوس اللي معاك = رصيد آخر اليوم (كاش + بنك) — من نفس الحساب الظاهر فوق
+  // الفلوس اللي معاك = رصيد آخر اليوم (كاش + بنك)
   var closeCash = Number((document.getElementById('close-cash').textContent||'0').replace(/,/g,'')) || 0;
   var closeBank = Number((document.getElementById('close-bank').textContent||'0').replace(/,/g,'')) || 0;
-  var haveNow = closeCash + closeBank;
+  var grossHave = closeCash + closeBank;
 
+  // ── نطرح الأمانات المفتوحة (فلوس ناس عندك لازم ترجعها — مش فلوسك) ──
+  var { data: trustTxs } = await sb.from('transactions').select('category,amount').in('category',['trust_in','trust_out']).lte('tx_date', curDate);
+  var openTrust = (trustTxs||[]).reduce(function(s,t){
+    return s + Number(t.amount) * (t.category==='trust_in' ? 1 : -1);
+  }, 0);
+  if(openTrust < 0) openTrust = 0; // لو مترجعتش أكتر مما استلمت، الافتراضي صفر
+
+  var haveNow = grossHave - openTrust;
   var due = Number(target);
   var diff = haveNow - due;
 
@@ -682,14 +690,26 @@ function calcOwnerDiff(){
     ? (diff===0 ? 'كافي بالظبط ✓' : 'كافي — هيفضل معاك '+fmt(diff)+' AED')
     : 'مش كافي — ناقصك '+fmt(Math.abs(diff))+' AED';
 
-  el.innerHTML = '<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px dashed var(--paper-line);font-size:13px;margin-bottom:8px">'
-    + '<span style="color:var(--ink-soft)">💰 الفلوس اللي معاك الآن</span>'
+  var html = '';
+  html += '<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px dashed var(--paper-line);font-size:13px">'
+    + '<span style="color:var(--ink-soft)">💰 إجمالي الرصيد</span>'
+    + '<span style="font-weight:600">'+fmt(grossHave)+' AED</span>'
+    + '</div>';
+  if(openTrust > 0){
+    html += '<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px dashed var(--paper-line);font-size:13px">'
+      + '<span style="color:var(--brass)">🛡️ ناقص: أمانات مفتوحة (مش فلوسك)</span>'
+      + '<span style="font-weight:600;color:var(--brass)">-'+fmt(openTrust)+' AED</span>'
+      + '</div>';
+  }
+  html += '<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px dashed var(--paper-line);font-size:13px;margin-bottom:8px">'
+    + '<span style="color:var(--ink-soft);font-weight:700">💰 المتاح فعلياً للسداد</span>'
     + '<span style="font-weight:700">'+fmt(haveNow)+' AED</span>'
     + '</div>'
     + '<div style="display:flex;justify-content:space-between;padding:7px 0;font-size:14px;margin-bottom:10px">'
     + '<span style="font-weight:600">الحالة</span>'
     + '<span style="font-weight:800;color:'+color+'">'+text+'</span>'
     + '</div>';
+  el.innerHTML = html;
 }
 window.calcOwnerDiff = calcOwnerDiff;
 
