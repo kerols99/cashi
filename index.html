@@ -203,11 +203,11 @@ button{font-family:inherit}
           <button class="icon-btn" onclick="doLogout()" title="خروج">⎋</button>
         </div>
       </div>
-      <div class="date-nav">
+      <div class="date-nav" style="position:relative">
         <button class="arrow" onclick="shiftDay(-1)">›</button>
-        <div class="date-label" id="date-label" onclick="openDatePicker()">—</div>
+        <div class="date-label" id="date-label">—</div>
         <button class="arrow" onclick="shiftDay(1)">‹</button>
-        <input type="date" id="hidden-date-input" class="hidden-date-input" onchange="jumpToDate(this.value)">
+        <input type="date" id="hidden-date-input" onchange="jumpToDate(this.value)" style="position:absolute;right:52px;left:52px;top:0;height:100%;opacity:0;border:none;background:transparent;font-size:16px;-webkit-appearance:none;cursor:pointer">
       </div>
     </div>
   </div>
@@ -850,12 +850,6 @@ function shiftDay(delta){
 }
 window.shiftDay = shiftDay;
 
-function openDatePicker(){
-  var input = document.getElementById('hidden-date-input');
-  input.value = curDate;
-  input.showPicker ? input.showPicker() : input.click();
-}
-window.openDatePicker = openDatePicker;
 function jumpToDate(v){ if(!v) return; curDate = v; loadDay(curDate); }
 window.jumpToDate = jumpToDate;
 
@@ -904,6 +898,8 @@ async function loadDay(dateStr){
 
   var lbl = fmtDateLabel(dateStr);
   document.getElementById('date-label').innerHTML = lbl.main + (lbl.today ? '<span class="today-tag">اليوم</span>' : '');
+  var hiddenDateInput = document.getElementById('hidden-date-input');
+  if(hiddenDateInput) hiddenDateInput.value = dateStr;
 
   var opening = null, txs = [];
   await Promise.all([
