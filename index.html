@@ -232,8 +232,8 @@ button{font-family:inherit}
     </div>
 
     <div class="summary-strip fade-up">
-      <div class="sum-card in"><div class="lbl">↓ الداخل اليوم</div><div class="amt" id="sum-in">0</div></div>
-      <div class="sum-card out"><div class="lbl">↑ الخارج اليوم</div><div class="amt" id="sum-out">0</div></div>
+      <div class="sum-card in" onclick="openDayFilterView('in')" style="cursor:pointer"><div class="lbl">↓ الداخل اليوم</div><div class="amt" id="sum-in">0</div></div>
+      <div class="sum-card out" onclick="openDayFilterView('out')" style="cursor:pointer"><div class="lbl">↑ الخارج اليوم</div><div class="amt" id="sum-out">0</div></div>
     </div>
 
     <div class="receipt fade-up" style="margin-top:14px">
@@ -352,6 +352,13 @@ button{font-family:inherit}
   <div class="sheet-title">🔍 بحث في كل الحركات</div>
   <div class="search-box"><span class="ic">🔍</span><input type="text" id="search-input" placeholder="اسم، ملاحظة، أو فئة..." oninput="runSearch()" autofocus></div>
   <div id="search-results"></div>
+</div>
+
+<div class="sheet-overlay" id="dayfilter-overlay" onclick="closeDayFilterView()"></div>
+<div class="sheet" id="dayfilter-sheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-title" id="dayfilter-title">حركات اليوم</div>
+  <div id="dayfilter-results"></div>
 </div>
 
 <div class="sheet-overlay" id="loans-overlay" onclick="closeLoansView()"></div>
@@ -973,7 +980,10 @@ function getCatDisplay(category){
   return { label: category, icon: '📌' };
 }
 
+let curDayTxs = [];
+
 function renderTxList(txs){
+  curDayTxs = txs; // كاش لليوم الحالي — يستخدم في فلترة الداخل/الخارج
   var el = document.getElementById('tx-list');
   if(!txs.length){ el.innerHTML = '<div class="empty-state"><div class="ic">🧾</div>لسه مفيش حركات اليوم ده</div>'; return; }
   el.innerHTML = txs.map(function(t){
@@ -987,6 +997,41 @@ function renderTxList(txs){
       + '</div>';
   }).join('');
 }
+
+function openDayFilterView(direction){
+  var filtered = curDayTxs.filter(function(t){ return t.direction === direction; });
+  var title = direction === 'in' ? '↓ الداخل اليوم' : '↑ الخارج اليوم';
+  document.getElementById('dayfilter-title').textContent = title;
+
+  var el = document.getElementById('dayfilter-results');
+  if(!filtered.length){
+    el.innerHTML = '<div class="empty-state"><div class="ic">🧾</div>مفيش حركات '+(direction==='in'?'دخول':'خروج')+' اليوم ده</div>';
+  } else {
+    var total = filtered.reduce(function(s,t){return s+Number(t.amount);},0);
+    var html = '<div class="summary-strip" style="margin-bottom:14px"><div class="sum-card '+direction+'"><div class="lbl">الإجمالي</div><div class="amt">'+fmt(total)+'</div></div></div>';
+    html += '<div class="tx-list">' + filtered.map(function(t){
+      var disp = getCatDisplay(t.category);
+      var methodLabel = t.method==='cash' ? '💵 كاش' : '🏦 '+getBankAccountName(t.bank_account_id);
+      var meta = [t.person_name, t.notes].filter(Boolean).join(' — ') || methodLabel;
+      return '<div class="tx-row" onclick="closeDayFilterView();setTimeout(()=>openEditTx('+t.id+'),300)">'
+        + '<div class="tx-icon '+t.direction+'">'+disp.icon+'</div>'
+        + '<div class="tx-info"><div class="tx-cat">'+disp.label+'</div><div class="tx-meta">'+escapeHtml(meta)+'</div></div>'
+        + '<div class="tx-right"><div class="tx-amt '+t.direction+'">'+fmt(t.amount)+'</div><div class="tx-method">'+methodLabel+'</div></div>'
+        + '</div>';
+    }).join('') + '</div>';
+    el.innerHTML = html;
+  }
+
+  document.getElementById('dayfilter-overlay').classList.add('open');
+  document.getElementById('dayfilter-sheet').classList.add('open');
+}
+window.openDayFilterView = openDayFilterView;
+
+function closeDayFilterView(){
+  document.getElementById('dayfilter-overlay').classList.remove('open');
+  document.getElementById('dayfilter-sheet').classList.remove('open');
+}
+window.closeDayFilterView = closeDayFilterView;
 
 function openBalanceEdit(){
   document.getElementById('bal-cash').value = Math.round(curOpening.cash);
