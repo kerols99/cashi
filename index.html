@@ -1009,42 +1009,53 @@ function openDayFilterView(direction){
   } else {
     var total = filtered.reduce(function(s,t){return s+Number(t.amount);},0);
 
-    // ── تفصيل حسب طريقة الدفع: كاش + كل حساب بنكي لوحده ──
-    var cashTotal = 0;
-    var bankTotals = {}; // key: bank_account_id (أو 'unassigned') → amount
+    // ── تجميع الحركات حسب طريقة الدفع: كاش + كل حساب بنكي لوحده ──
+    var groups = {}; // key: 'cash' أو bank_account_id (أو 'unassigned') → {label, icon, total, txs:[]}
     filtered.forEach(function(t){
-      var amt = Number(t.amount);
-      if(t.method === 'cash'){ cashTotal += amt; }
+      var key, label, icon;
+      if(t.method === 'cash'){ key='cash'; label='كاش'; icon='💵'; }
       else {
-        var key = t.bank_account_id ? String(t.bank_account_id) : 'unassigned';
-        bankTotals[key] = (bankTotals[key]||0) + amt;
+        key = t.bank_account_id ? String(t.bank_account_id) : 'unassigned';
+        label = t.bank_account_id ? getBankAccountName(t.bank_account_id) : 'بنك (بدون حساب محدد)';
+        icon = '🏦';
       }
+      if(!groups[key]) groups[key] = { label:label, icon:icon, total:0, txs:[] };
+      groups[key].total += Number(t.amount);
+      groups[key].txs.push(t);
+    });
+
+    // ترتيب: كاش أولاً، بعدين البنوك الأكبر مبلغاً
+    var groupKeys = Object.keys(groups).sort(function(a,b){
+      if(a==='cash') return -1; if(b==='cash') return 1;
+      return groups[b].total - groups[a].total;
     });
 
     var html = '<div class="summary-strip" style="margin-bottom:10px"><div class="sum-card '+direction+'"><div class="lbl">الإجمالي</div><div class="amt">'+fmt(total)+'</div></div></div>';
 
-    html += '<div class="tx-list" style="margin-bottom:14px">';
-    if(cashTotal > 0){
+    // ملخص سريع فوق (نفس الشكل القديم)
+    html += '<div class="tx-list" style="margin-bottom:16px">';
+    groupKeys.forEach(function(key){
+      var g = groups[key];
       html += '<div style="display:flex;justify-content:space-between;padding:11px 16px;border-bottom:1px dashed var(--paper-line);font-size:13.5px">'
-        + '<span>💵 كاش</span><span style="font-weight:700;font-family:var(--font-num)">'+fmt(cashTotal)+'</span></div>';
-    }
-    Object.keys(bankTotals).forEach(function(key){
-      var name = key==='unassigned' ? 'بنك (بدون حساب محدد)' : getBankAccountName(key);
-      html += '<div style="display:flex;justify-content:space-between;padding:11px 16px;border-bottom:1px dashed var(--paper-line);font-size:13.5px">'
-        + '<span>🏦 '+escapeHtml(name)+'</span><span style="font-weight:700;font-family:var(--font-num)">'+fmt(bankTotals[key])+'</span></div>';
+        + '<span>'+g.icon+' '+escapeHtml(g.label)+'</span><span style="font-weight:700;font-family:var(--font-num)">'+fmt(g.total)+'</span></div>';
     });
     html += '</div>';
 
-    html += '<div class="tx-list">' + filtered.map(function(t){
-      var disp = getCatDisplay(t.category);
-      var methodLabel = t.method==='cash' ? '💵 كاش' : '🏦 '+getBankAccountName(t.bank_account_id);
-      var meta = [t.person_name, t.notes].filter(Boolean).join(' — ') || methodLabel;
-      return '<div class="tx-row" onclick="closeDayFilterView();setTimeout(()=>openEditTx('+t.id+'),300)">'
-        + '<div class="tx-icon '+t.direction+'">'+disp.icon+'</div>'
-        + '<div class="tx-info"><div class="tx-cat">'+disp.label+'</div><div class="tx-meta">'+escapeHtml(meta)+'</div></div>'
-        + '<div class="tx-right"><div class="tx-amt '+t.direction+'">'+fmt(t.amount)+'</div><div class="tx-method">'+methodLabel+'</div></div>'
-        + '</div>';
-    }).join('') + '</div>';
+    // ── قوائم مقسّمة: عنوان طريقة الدفع، وتحته أسماء اللي دفعوا/استلموا بس ──
+    groupKeys.forEach(function(key){
+      var g = groups[key];
+      html += '<div class="sec-label"><span>'+g.icon+' '+escapeHtml(g.label)+'</span><span style="font-family:var(--font-num);font-weight:700;color:var(--ink)">'+fmt(g.total)+'</span></div>';
+      html += '<div class="tx-list" style="margin-bottom:14px">' + g.txs.map(function(t){
+        var disp = getCatDisplay(t.category);
+        var meta = [t.person_name, t.notes].filter(Boolean).join(' — ') || disp.label;
+        return '<div class="tx-row" onclick="closeDayFilterView();setTimeout(()=>openEditTx('+t.id+'),300)">'
+          + '<div class="tx-icon '+t.direction+'">'+disp.icon+'</div>'
+          + '<div class="tx-info"><div class="tx-cat">'+disp.label+'</div><div class="tx-meta">'+escapeHtml(meta)+'</div></div>'
+          + '<div class="tx-right"><div class="tx-amt '+t.direction+'">'+fmt(t.amount)+'</div></div>'
+          + '</div>';
+      }).join('') + '</div>';
+    });
+
     el.innerHTML = html;
   }
 
