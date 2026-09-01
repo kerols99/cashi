@@ -1001,13 +1001,28 @@ function renderTxList(txs){
 function openDayFilterView(direction){
   var filtered = curDayTxs.filter(function(t){ return t.direction === direction; });
   var title = direction === 'in' ? '↓ الداخل اليوم' : '↑ الخارج اليوم';
-  document.getElementById('dayfilter-title').textContent = title;
+  var emptyMsg = 'مفيش حركات '+(direction==='in'?'دخول':'خروج')+' اليوم ده';
+  renderFilteredTxSheet(title, filtered, emptyMsg);
+}
+window.openDayFilterView = openDayFilterView;
 
+function openMonthCategoryDetail(catKey){
+  var filtered = (window._lastMonthTxs||[]).filter(function(t){ return t.category === catKey; });
+  var disp = getCatDisplay(catKey);
+  var title = disp.icon + ' ' + disp.label + ' — تفصيل الشهر';
+  renderFilteredTxSheet(title, filtered, 'مفيش حركات في هذه الفئة الشهر ده');
+}
+window.openMonthCategoryDetail = openMonthCategoryDetail;
+
+function renderFilteredTxSheet(title, filtered, emptyMsg){
+  document.getElementById('dayfilter-title').textContent = title;
   var el = document.getElementById('dayfilter-results');
+
   if(!filtered.length){
-    el.innerHTML = '<div class="empty-state"><div class="ic">🧾</div>مفيش حركات '+(direction==='in'?'دخول':'خروج')+' اليوم ده</div>';
+    el.innerHTML = '<div class="empty-state"><div class="ic">🧾</div>'+emptyMsg+'</div>';
   } else {
     var total = filtered.reduce(function(s,t){return s+Number(t.amount);},0);
+    var direction = filtered[0].direction; // للون كارت الإجمالي بس
 
     // ── تجميع الحركات حسب طريقة الدفع: كاش + كل حساب بنكي لوحده ──
     var groups = {}; // key: 'cash' أو bank_account_id (أو 'unassigned') → {label, icon, total, txs:[]}
@@ -1032,7 +1047,7 @@ function openDayFilterView(direction){
 
     var html = '<div class="summary-strip" style="margin-bottom:10px"><div class="sum-card '+direction+'"><div class="lbl">الإجمالي</div><div class="amt">'+fmt(total)+'</div></div></div>';
 
-    // ملخص سريع فوق (نفس الشكل القديم)
+    // ملخص سريع فوق
     html += '<div class="tx-list" style="margin-bottom:16px">';
     groupKeys.forEach(function(key){
       var g = groups[key];
@@ -1047,7 +1062,7 @@ function openDayFilterView(direction){
       html += '<div class="sec-label"><span>'+g.icon+' '+escapeHtml(g.label)+'</span><span style="font-family:var(--font-num);font-weight:700;color:var(--ink)">'+fmt(g.total)+'</span></div>';
       html += '<div class="tx-list" style="margin-bottom:14px">' + g.txs.map(function(t){
         var disp = getCatDisplay(t.category);
-        var meta = [t.person_name, t.notes].filter(Boolean).join(' — ') || disp.label;
+        var meta = [t.person_name, t.notes, t.tx_date].filter(Boolean).join(' — ') || disp.label;
         return '<div class="tx-row" onclick="closeDayFilterView();setTimeout(()=>openEditTx('+t.id+'),300)">'
           + '<div class="tx-icon '+t.direction+'">'+disp.icon+'</div>'
           + '<div class="tx-info"><div class="tx-cat">'+disp.label+'</div><div class="tx-meta">'+escapeHtml(meta)+'</div></div>'
@@ -1062,7 +1077,6 @@ function openDayFilterView(direction){
   document.getElementById('dayfilter-overlay').classList.add('open');
   document.getElementById('dayfilter-sheet').classList.add('open');
 }
-window.openDayFilterView = openDayFilterView;
 
 function closeDayFilterView(){
   document.getElementById('dayfilter-overlay').classList.remove('open');
@@ -1482,7 +1496,7 @@ async function openMonthSummary(){
     if(!totals[k]) return;
     any=true;
     var pct = (totals[k]/maxVal*100).toFixed(0);
-    html += '<div class="cat-bar-row">'
+    html += '<div class="cat-bar-row" onclick="openMonthCategoryDetail(\'' + k + '\')" style="cursor:pointer">'
       + '<div class="cat-bar-top"><span class="n">'+CAT_ICONS[k]+' '+CAT_LABELS[k]+'</span><span class="v">'+fmt(totals[k])+'</span></div>'
       + '<div class="cat-bar-track"><div class="cat-bar-fill" style="width:'+pct+'%;background:'+CAT_COLORS[k]+'"></div></div>'
       + '<div class="cat-bar-sub">💵 '+fmt(totalsCash[k])+' &nbsp; 🏦 '+fmt(totalsBank[k])+'</div>'
